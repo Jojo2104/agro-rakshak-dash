@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,42 +11,41 @@ import {
   Power, 
   Activity,
   TrendingUp,
-  AlertCircle,
-  Leaf,
   Settings,
+  Leaf,
   Bell
 } from "lucide-react";
 import { toast } from "sonner";
-
-// Mock Firebase connection - replace with actual Firebase config
-const mockFirebaseConfig = {
-  apiKey: "demo",
-  authDomain: "demo.firebaseapp.com",
-  projectId: "demo",
-};
+import { supabase } from "@/integrations/supabase/client";
+import { IoTSimulator } from "@/components/IoTSimulator";
 
 interface SensorData {
+  id: string;
   temperature: number;
   humidity: number;
-  soilMoisture: number;
-  timestamp: Date;
+  soil_moisture: number;
+  created_at: string;
 }
 
 interface ActuatorStatus {
-  pump: boolean;
-  fans: boolean;
+  id: string;
+  pump_active: boolean;
+  fans_active: boolean;
+  updated_at: string;
 }
 
 interface Thresholds {
-  maxTemp: number;
-  minMoisture: number;
+  id: string;
+  max_temperature: number;
+  min_soil_moisture: number;
+  updated_at: string;
 }
 
 interface Notification {
   id: string;
   message: string;
   type: "info" | "warning" | "success";
-  timestamp: Date;
+  created_at: string;
 }
 
 interface AIResult {
@@ -57,113 +55,180 @@ interface AIResult {
 }
 
 const Index = () => {
-  // State Management
-  const [sensorData, setSensorData] = useState<SensorData>({
-    temperature: 28,
-    humidity: 65,
-    soilMoisture: 55,
-    timestamp: new Date(),
-  });
-
-  const [actuators, setActuators] = useState<ActuatorStatus>({
-    pump: false,
-    fans: false,
-  });
-
-  const [thresholds, setThresholds] = useState<Thresholds>({
-    maxTemp: 32,
-    minMoisture: 50,
-  });
-
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: "1",
-      message: "System initialized successfully",
-      type: "success",
-      timestamp: new Date(),
-    },
-  ]);
-
+  const [latestSensorData, setLatestSensorData] = useState<SensorData | null>(null);
+  const [historicalData, setHistoricalData] = useState<SensorData[]>([]);
+  const [actuators, setActuators] = useState<ActuatorStatus | null>(null);
+  const [thresholds, setThresholds] = useState<Thresholds | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [aiResult, setAIResult] = useState<AIResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
-  const [historicalData, setHistoricalData] = useState<SensorData[]>([]);
-
-  // Simulate real-time sensor updates
+  // Fetch initial data
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newTemp = 25 + Math.random() * 10;
-      const newHumidity = 60 + Math.random() * 20;
-      const newMoisture = 45 + Math.random() * 20;
+    fetchLatestSensorData();
+    fetchHistoricalData();
+    fetchActuatorStatus();
+    fetchThresholds();
+    fetchNotifications();
+  }, []);
 
-      const newData: SensorData = {
-        temperature: Number(newTemp.toFixed(1)),
-        humidity: Number(newHumidity.toFixed(1)),
-        soilMoisture: Number(newMoisture.toFixed(1)),
-        timestamp: new Date(),
-      };
+  // Set up realtime subscriptions
+  useEffect(() => {
+    const sensorChannel = supabase
+      .channel('sensor-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sensor_readings'
+        },
+        (payload) => {
+          setLatestSensorData(payload.new as SensorData);
+          setHistoricalData(prev => [...prev.slice(-23), payload.new as SensorData]);
+        }
+      )
+      .subscribe();
 
-      setSensorData(newData);
-      setHistoricalData((prev) => [...prev.slice(-23), newData]);
+    const actuatorChannel = supabase
+      .channel('actuator-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'actuator_status'
+        },
+        (payload) => {
+          setActuators(payload.new as ActuatorStatus);
+        }
+      )
+      .subscribe();
 
-      // Automated actuator control
-      checkThresholds(newData);
-    }, 3000);
+    const thresholdChannel = supabase
+      .channel('threshold-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'system_thresholds'
+        },
+        (payload) => {
+          setThresholds(payload.new as Thresholds);
+        }
+      )
+      .subscribe();
 
-    return () => clearInterval(interval);
-  }, [thresholds]);
+    const notificationChannel = supabase
+      .channel('notification-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications'
+        },
+        (payload) => {
+          const newNotif = payload.new as Notification;
+          setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+          toast[newNotif.type](newNotif.message);
+        }
+      )
+      .subscribe();
 
-  const checkThresholds = (data: SensorData) => {
-    // Temperature check
-    if (data.temperature > thresholds.maxTemp && !actuators.fans) {
-      setActuators((prev) => ({ ...prev, fans: true }));
-      addNotification(
-        `ALERT: Temperature exceeded ${thresholds.maxTemp}°C, Cooling fans activated`,
-        "warning"
-      );
-    } else if (data.temperature <= thresholds.maxTemp - 2 && actuators.fans) {
-      setActuators((prev) => ({ ...prev, fans: false }));
-      addNotification("Temperature normalized, Cooling fans deactivated", "info");
-    }
-
-    // Soil moisture check
-    if (data.soilMoisture < thresholds.minMoisture && !actuators.pump) {
-      setActuators((prev) => ({ ...prev, pump: true }));
-      addNotification(
-        `ALERT: Soil moisture below ${thresholds.minMoisture}%, Water pump activated`,
-        "warning"
-      );
-    } else if (data.soilMoisture >= thresholds.minMoisture + 5 && actuators.pump) {
-      setActuators((prev) => ({ ...prev, pump: false }));
-      addNotification("Soil moisture restored, Water pump deactivated", "info");
-    }
-  };
-
-  const addNotification = (
-    message: string,
-    type: "info" | "warning" | "success"
-  ) => {
-    const newNotification: Notification = {
-      id: Date.now().toString(),
-      message,
-      type,
-      timestamp: new Date(),
+    return () => {
+      supabase.removeChannel(sensorChannel);
+      supabase.removeChannel(actuatorChannel);
+      supabase.removeChannel(thresholdChannel);
+      supabase.removeChannel(notificationChannel);
     };
-    setNotifications((prev) => [newNotification, ...prev.slice(0, 9)]);
-    toast[type](message);
+  }, []);
+
+  const fetchLatestSensorData = async () => {
+    const { data } = await supabase
+      .from('sensor_readings')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (data) setLatestSensorData(data);
   };
 
-  const toggleActuator = (actuator: "pump" | "fans") => {
-    setActuators((prev) => ({
-      ...prev,
-      [actuator]: !prev[actuator],
-    }));
-    addNotification(
-      `Manual override: ${actuator === "pump" ? "Water Pump" : "Cooling Fans"} ${
-        !actuators[actuator] ? "activated" : "deactivated"
-      }`,
-      "info"
-    );
+  const fetchHistoricalData = async () => {
+    const { data } = await supabase
+      .from('sensor_readings')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(24);
+    
+    if (data) setHistoricalData(data.reverse());
+  };
+
+  const fetchActuatorStatus = async () => {
+    const { data } = await supabase
+      .from('actuator_status')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    
+    if (data) setActuators(data);
+  };
+
+  const fetchThresholds = async () => {
+    const { data } = await supabase
+      .from('system_thresholds')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    
+    if (data) setThresholds(data);
+  };
+
+  const fetchNotifications = async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    if (data) setNotifications(data as Notification[]);
+  };
+
+  const updateThreshold = async (field: 'max_temperature' | 'min_soil_moisture', value: number) => {
+    if (!thresholds) return;
+
+    const { error } = await supabase
+      .from('system_thresholds')
+      .update({ [field]: value })
+      .eq('id', thresholds.id);
+
+    if (error) {
+      toast.error('Failed to update threshold');
+    } else {
+      toast.success('Threshold updated');
+    }
+  };
+
+  const toggleActuator = async (field: 'pump_active' | 'fans_active') => {
+    if (!actuators) return;
+
+    const newValue = !actuators[field];
+    const { error } = await supabase
+      .from('actuator_status')
+      .update({ [field]: newValue })
+      .eq('id', actuators.id);
+
+    if (error) {
+      toast.error('Failed to update actuator');
+    } else {
+      const actuatorName = field === 'pump_active' ? 'Water Pump' : 'Cooling Fans';
+      await supabase.from('notifications').insert({
+        message: `Manual override: ${actuatorName} ${newValue ? 'activated' : 'deactivated'}`,
+        type: 'info'
+      });
+    }
   };
 
   const runAIScan = () => {
@@ -185,393 +250,423 @@ const Index = () => {
         remedy: result.remedy,
       });
       setIsScanning(false);
-      addNotification(`AI Scan complete: ${result.name} detected`, "success");
+      
+      supabase.from('notifications').insert({
+        message: `AI Scan complete: ${result.name} detected`,
+        type: 'success'
+      });
     }, 2500);
   };
 
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      {/* Header */}
-      <header className="mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center glow-primary">
-              <Leaf className="w-7 h-7 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">AgroRakshak</h1>
-              <p className="text-sm text-muted-foreground">Smart Agriculture System</p>
-            </div>
-          </div>
-          <Badge variant="outline" className="px-3 py-1">
-            <Activity className="w-3 h-3 mr-1 animate-pulse" />
-            Live
-          </Badge>
+  if (!latestSensorData || !actuators || !thresholds) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center space-y-4">
+          <Activity className="w-12 h-12 mx-auto animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading system data...</p>
         </div>
-      </header>
+      </div>
+    );
+  }
 
-      <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="control">Control</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="ai">AI Diagnosis</TabsTrigger>
-        </TabsList>
-
-        {/* Dashboard Tab */}
-        <TabsContent value="dashboard" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Temperature Card */}
-            <Card className="p-6 gradient-card border-border/50 hover:border-primary/50 transition-all duration-300">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                  <Thermometer className="w-5 h-5 text-primary" />
-                </div>
-                <Badge variant={sensorData.temperature > thresholds.maxTemp ? "destructive" : "secondary"}>
-                  {sensorData.temperature > thresholds.maxTemp ? "High" : "Normal"}
-                </Badge>
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-6 md:py-10 max-w-7xl">
+        {/* Header */}
+        <header className="mb-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Leaf className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Temperature</h3>
-              <p className="text-3xl font-bold text-foreground">{sensorData.temperature}°C</p>
-            </Card>
-
-            {/* Humidity Card */}
-            <Card className="p-6 gradient-card border-border/50 hover:border-primary/50 transition-all duration-300">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                  <Droplets className="w-5 h-5 text-primary" />
-                </div>
-                <Badge variant="secondary">Normal</Badge>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-semibold text-foreground">AgroRakshak</h1>
+                <p className="text-muted-foreground mt-1">Smart Agriculture System</p>
               </div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Humidity</h3>
-              <p className="text-3xl font-bold text-foreground">{sensorData.humidity}%</p>
-            </Card>
-
-            {/* Soil Moisture Card */}
-            <Card className="p-6 gradient-card border-border/50 hover:border-primary/50 transition-all duration-300">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                  <Droplets className="w-5 h-5 text-primary" />
-                </div>
-                <Badge variant={sensorData.soilMoisture < thresholds.minMoisture ? "destructive" : "secondary"}>
-                  {sensorData.soilMoisture < thresholds.minMoisture ? "Low" : "Normal"}
-                </Badge>
-              </div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Soil Moisture</h3>
-              <p className="text-3xl font-bold text-foreground">{sensorData.soilMoisture}%</p>
-            </Card>
+            </div>
+            <Badge variant="outline" className="px-4 py-2 border-primary/30">
+              <Activity className="w-3 h-3 mr-2 text-primary" />
+              Live
+            </Badge>
           </div>
+        </header>
 
-          {/* Actuator Status */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6 gradient-card border-border/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${actuators.pump ? 'bg-primary/20 glow-primary' : 'bg-muted'}`}>
-                    <Droplets className={`w-6 h-6 ${actuators.pump ? 'text-primary' : 'text-muted-foreground'}`} />
+        <Tabs defaultValue="dashboard" className="space-y-8">
+          <TabsList className="w-full max-w-2xl bg-muted">
+            <TabsTrigger value="dashboard" className="flex-1">Dashboard</TabsTrigger>
+            <TabsTrigger value="control" className="flex-1">Control</TabsTrigger>
+            <TabsTrigger value="analytics" className="flex-1">Analytics</TabsTrigger>
+            <TabsTrigger value="ai" className="flex-1">AI Diagnosis</TabsTrigger>
+          </TabsList>
+
+          {/* Dashboard Tab */}
+          <TabsContent value="dashboard" className="space-y-8">
+            {/* IoT Simulator */}
+            <IoTSimulator />
+
+            {/* Sensor Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="p-6 border-border/50">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Thermometer className="w-6 h-6 text-primary" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Water Pump</h3>
-                    <p className="text-sm text-muted-foreground">Irrigation System</p>
-                  </div>
+                  <Badge variant={Number(latestSensorData.temperature) > thresholds.max_temperature ? "destructive" : "secondary"}>
+                    {Number(latestSensorData.temperature) > thresholds.max_temperature ? "High" : "Normal"}
+                  </Badge>
                 </div>
-                <Badge variant={actuators.pump ? "default" : "secondary"} className={actuators.pump ? "glow-primary" : ""}>
-                  {actuators.pump ? "ON" : "OFF"}
-                </Badge>
-              </div>
-            </Card>
-
-            <Card className="p-6 gradient-card border-border/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${actuators.fans ? 'bg-primary/20 glow-primary' : 'bg-muted'}`}>
-                    <Wind className={`w-6 h-6 ${actuators.fans ? 'text-primary animate-spin' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Cooling Fans</h3>
-                    <p className="text-sm text-muted-foreground">Climate Control</p>
-                  </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Temperature</p>
+                  <p className="text-4xl font-semibold text-foreground">{latestSensorData.temperature}°C</p>
                 </div>
-                <Badge variant={actuators.fans ? "default" : "secondary"} className={actuators.fans ? "glow-primary" : ""}>
-                  {actuators.fans ? "ON" : "OFF"}
-                </Badge>
-              </div>
-            </Card>
-          </div>
+              </Card>
 
-          {/* Notifications */}
-          <Card className="p-6 gradient-card border-border/50">
-            <div className="flex items-center gap-2 mb-4">
-              <Bell className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-foreground">System Notifications</h3>
-            </div>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {notifications.map((notif) => (
-                <div
-                  key={notif.id}
-                  className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50 border border-border/30"
-                >
-                  <AlertCircle className={`w-4 h-4 mt-0.5 ${
-                    notif.type === "warning" ? "text-destructive" : 
-                    notif.type === "success" ? "text-primary" : 
-                    "text-muted-foreground"
-                  }`} />
-                  <div className="flex-1">
-                    <p className="text-sm text-foreground">{notif.message}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {notif.timestamp.toLocaleTimeString()}
-                    </p>
+              <Card className="p-6 border-border/50">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Droplets className="w-6 h-6 text-primary" />
                   </div>
+                  <Badge variant="secondary">Normal</Badge>
                 </div>
-              ))}
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* Control Tab */}
-        <TabsContent value="control" className="space-y-6">
-          <Card className="p-6 gradient-card border-border/50">
-            <div className="flex items-center gap-2 mb-6">
-              <Settings className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-foreground text-lg">Automation Settings</h3>
-            </div>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Maximum Temperature Threshold: {thresholds.maxTemp}°C
-                </label>
-                <Slider
-                  value={[thresholds.maxTemp]}
-                  onValueChange={(value) => setThresholds((prev) => ({ ...prev, maxTemp: value[0] }))}
-                  min={25}
-                  max={40}
-                  step={1}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Cooling fans will activate when temperature exceeds this value
-                </p>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Minimum Soil Moisture Threshold: {thresholds.minMoisture}%
-                </label>
-                <Slider
-                  value={[thresholds.minMoisture]}
-                  onValueChange={(value) => setThresholds((prev) => ({ ...prev, minMoisture: value[0] }))}
-                  min={30}
-                  max={70}
-                  step={5}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Water pump will activate when soil moisture drops below this value
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 gradient-card border-border/50">
-            <div className="flex items-center gap-2 mb-6">
-              <Power className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-foreground text-lg">Manual Override</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button
-                onClick={() => toggleActuator("pump")}
-                variant={actuators.pump ? "default" : "secondary"}
-                size="lg"
-                className="h-24 text-lg"
-              >
-                <Droplets className="w-6 h-6 mr-2" />
-                Water Pump: {actuators.pump ? "ON" : "OFF"}
-              </Button>
-
-              <Button
-                onClick={() => toggleActuator("fans")}
-                variant={actuators.fans ? "default" : "secondary"}
-                size="lg"
-                className="h-24 text-lg"
-              >
-                <Wind className="w-6 h-6 mr-2" />
-                Cooling Fans: {actuators.fans ? "ON" : "OFF"}
-              </Button>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* Analytics Tab */}
-        <TabsContent value="analytics" className="space-y-6">
-          <Card className="p-6 gradient-card border-border/50">
-            <div className="flex items-center gap-2 mb-6">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-foreground text-lg">24-Hour Trends</h3>
-            </div>
-            
-            <div className="space-y-8">
-              {/* Temperature Trend */}
-              <div>
-                <h4 className="text-sm font-medium text-foreground mb-3">Temperature (°C)</h4>
-                <div className="h-40 bg-secondary/30 rounded-lg p-4 relative overflow-hidden">
-                  <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="tempGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <polyline
-                      fill="url(#tempGradient)"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth="0.5"
-                      points={historicalData.length > 0 
-                        ? historicalData.map((data, i) => 
-                            `${(i / (historicalData.length - 1)) * 100},${100 - ((data.temperature - 20) / 20) * 100}`
-                          ).join(" ") + ` 100,100 0,100`
-                        : "0,50 100,50 100,100 0,100"
-                      }
-                    />
-                  </svg>
-                  {actuators.fans && (
-                    <div className="absolute top-2 right-2 text-xs text-primary bg-primary/20 px-2 py-1 rounded">
-                      Fans Active
-                    </div>
-                  )}
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Humidity</p>
+                  <p className="text-4xl font-semibold text-foreground">{latestSensorData.humidity}%</p>
                 </div>
-              </div>
+              </Card>
 
-              {/* Soil Moisture Trend */}
-              <div>
-                <h4 className="text-sm font-medium text-foreground mb-3">Soil Moisture (%)</h4>
-                <div className="h-40 bg-secondary/30 rounded-lg p-4 relative overflow-hidden">
-                  <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="moistureGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <polyline
-                      fill="url(#moistureGradient)"
-                      stroke="hsl(var(--chart-2))"
-                      strokeWidth="0.5"
-                      points={historicalData.length > 0
-                        ? historicalData.map((data, i) => 
-                            `${(i / (historicalData.length - 1)) * 100},${100 - (data.soilMoisture / 100) * 100}`
-                          ).join(" ") + ` 100,100 0,100`
-                        : "0,50 100,50 100,100 0,100"
-                      }
-                    />
-                  </svg>
-                  {actuators.pump && (
-                    <div className="absolute top-2 right-2 text-xs text-primary bg-primary/20 px-2 py-1 rounded">
-                      Pump Active
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 gradient-card border-border/50">
-            <h3 className="font-semibold text-foreground mb-4">System Efficacy</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-secondary/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Automation Rate</p>
-                <p className="text-2xl font-bold text-primary">94.3%</p>
-              </div>
-              <div className="p-4 bg-secondary/30 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Response Time</p>
-                <p className="text-2xl font-bold text-primary">1.2s</p>
-              </div>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* AI Diagnosis Tab */}
-        <TabsContent value="ai" className="space-y-6">
-          <Card className="p-6 gradient-card border-border/50">
-            <div className="flex items-center gap-2 mb-6">
-              <Leaf className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-foreground text-lg">AI Disease Detection</h3>
-            </div>
-
-            <div className="text-center py-8">
-              <Button
-                onClick={runAIScan}
-                disabled={isScanning}
-                size="lg"
-                className="px-8 py-6 text-lg glow-primary"
-              >
-                {isScanning ? (
-                  <>
-                    <Activity className="w-5 h-5 mr-2 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Leaf className="w-5 h-5 mr-2" />
-                    Run Live AI Scan
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {aiResult && (
-              <div className="mt-6 p-6 bg-secondary/30 rounded-lg border border-primary/30 glow-secondary">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Diagnosis</p>
-                    <p className="text-xl font-bold text-primary">{aiResult.diagnosis}</p>
+              <Card className="p-6 border-border/50">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Droplets className="w-6 h-6 text-primary" />
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Confidence</p>
-                    <p className="text-xl font-bold text-primary">{aiResult.confidence}%</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Status</p>
-                    <Badge variant={aiResult.diagnosis === "Healthy" ? "default" : "destructive"}>
-                      {aiResult.diagnosis === "Healthy" ? "Normal" : "Action Required"}
-                    </Badge>
-                  </div>
+                  <Badge variant={Number(latestSensorData.soil_moisture) < thresholds.min_soil_moisture ? "destructive" : "secondary"}>
+                    {Number(latestSensorData.soil_moisture) < thresholds.min_soil_moisture ? "Low" : "Normal"}
+                  </Badge>
                 </div>
-                <div className="pt-4 border-t border-border/30">
-                  <p className="text-sm font-medium text-foreground mb-2">Recommended Action:</p>
-                  <p className="text-sm text-muted-foreground">{aiResult.remedy}</p>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Soil Moisture</p>
+                  <p className="text-4xl font-semibold text-foreground">{latestSensorData.soil_moisture}%</p>
                 </div>
-              </div>
-            )}
-          </Card>
+              </Card>
+            </div>
 
-          <Card className="p-6 gradient-card border-border/50">
-            <h3 className="font-semibold text-foreground mb-4">AI Model Information</h3>
+            {/* Actuator Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Model Architecture</p>
-                <p className="text-foreground font-medium">CNN (MobileNetV2)</p>
+              <Card className="p-6 border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
+                      actuators.pump_active ? 'bg-primary/10' : 'bg-muted'
+                    }`}>
+                      <Droplets className={`w-7 h-7 ${
+                        actuators.pump_active ? 'text-primary' : 'text-muted-foreground'
+                      }`} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground">Water Pump</h3>
+                      <p className="text-sm text-muted-foreground">Irrigation System</p>
+                    </div>
+                  </div>
+                  <Badge variant={actuators.pump_active ? "default" : "secondary"} className="text-sm px-3 py-1">
+                    {actuators.pump_active ? "ON" : "OFF"}
+                  </Badge>
+                </div>
+              </Card>
+
+              <Card className="p-6 border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
+                      actuators.fans_active ? 'bg-primary/10' : 'bg-muted'
+                    }`}>
+                      <Wind className={`w-7 h-7 ${
+                        actuators.fans_active ? 'text-primary' : 'text-muted-foreground'
+                      }`} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground">Cooling Fans</h3>
+                      <p className="text-sm text-muted-foreground">Climate Control</p>
+                    </div>
+                  </div>
+                  <Badge variant={actuators.fans_active ? "default" : "secondary"} className="text-sm px-3 py-1">
+                    {actuators.fans_active ? "ON" : "OFF"}
+                  </Badge>
+                </div>
+              </Card>
+            </div>
+
+            {/* Notifications */}
+            <Card className="p-6 border-border/50">
+              <div className="flex items-center gap-3 mb-6">
+                <Bell className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-lg text-foreground">System Notifications</h3>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Overall Accuracy</p>
-                <p className="text-foreground font-medium">96.5%</p>
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No notifications yet</p>
+                ) : (
+                  notifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className="flex items-start gap-3 p-4 rounded-lg bg-secondary/50 border border-border/30"
+                    >
+                      <div className={`w-2 h-2 rounded-full mt-2 ${
+                        notif.type === "warning" ? "bg-destructive" : 
+                        notif.type === "success" ? "bg-primary" : 
+                        "bg-muted-foreground"
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground">{notif.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(notif.created_at).toLocaleTimeString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-              <div className="md:col-span-2">
-                <p className="text-sm text-muted-foreground mb-2">Detectable Diseases</p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <Badge variant="secondary">Healthy</Badge>
-                  <Badge variant="secondary">Early Blight</Badge>
-                  <Badge variant="secondary">Late Blight</Badge>
-                  <Badge variant="secondary">Septoria Leaf Spot</Badge>
-                  <Badge variant="secondary">Bacterial Spot</Badge>
-                  <Badge variant="secondary">Target Spot</Badge>
+            </Card>
+          </TabsContent>
+
+          {/* Control Tab */}
+          <TabsContent value="control" className="space-y-8">
+            <Card className="p-6 border-border/50">
+              <div className="flex items-center gap-3 mb-8">
+                <Settings className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-lg text-foreground">Automation Settings</h3>
+              </div>
+              
+              <div className="space-y-8">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-4 block">
+                    Maximum Temperature Threshold: {thresholds.max_temperature}°C
+                  </label>
+                  <Slider
+                    value={[Number(thresholds.max_temperature)]}
+                    onValueChange={(value) => updateThreshold('max_temperature', value[0])}
+                    min={25}
+                    max={40}
+                    step={1}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Cooling fans will activate when temperature exceeds this value
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-4 block">
+                    Minimum Soil Moisture Threshold: {thresholds.min_soil_moisture}%
+                  </label>
+                  <Slider
+                    value={[Number(thresholds.min_soil_moisture)]}
+                    onValueChange={(value) => updateThreshold('min_soil_moisture', value[0])}
+                    min={30}
+                    max={70}
+                    step={5}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Water pump will activate when soil moisture drops below this value
+                  </p>
                 </div>
               </div>
-            </div>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </Card>
+
+            <Card className="p-6 border-border/50">
+              <div className="flex items-center gap-3 mb-8">
+                <Power className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-lg text-foreground">Manual Override</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button
+                  onClick={() => toggleActuator("pump_active")}
+                  variant={actuators.pump_active ? "default" : "outline"}
+                  size="lg"
+                  className="h-28 flex-col gap-3"
+                >
+                  <Droplets className="w-7 h-7" />
+                  <span className="text-base">Water Pump: {actuators.pump_active ? "ON" : "OFF"}</span>
+                </Button>
+
+                <Button
+                  onClick={() => toggleActuator("fans_active")}
+                  variant={actuators.fans_active ? "default" : "outline"}
+                  size="lg"
+                  className="h-28 flex-col gap-3"
+                >
+                  <Wind className="w-7 h-7" />
+                  <span className="text-base">Cooling Fans: {actuators.fans_active ? "ON" : "OFF"}</span>
+                </Button>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-8">
+            <Card className="p-6 border-border/50">
+              <div className="flex items-center gap-3 mb-8">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-lg text-foreground">24-Hour Trends</h3>
+              </div>
+              
+              <div className="space-y-10">
+                <div>
+                  <h4 className="text-sm font-medium text-foreground mb-4">Temperature (°C)</h4>
+                  <div className="h-48 bg-muted/30 rounded-lg p-6 relative">
+                    {historicalData.length > 1 ? (
+                      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="tempGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <polyline
+                          fill="url(#tempGradient)"
+                          stroke="hsl(var(--primary))"
+                          strokeWidth="0.5"
+                          points={historicalData
+                            .map((data, i) => {
+                              const x = (i / (historicalData.length - 1)) * 100;
+                              const y = 100 - ((Number(data.temperature) - 20) / 20) * 100;
+                              return `${x},${y}`;
+                            })
+                            .join(" ") + ` 100,100 0,100`}
+                        />
+                      </svg>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-12">Collecting data...</p>
+                    )}
+                    {actuators.fans_active && (
+                      <div className="absolute top-4 right-4 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
+                        Fans Active
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium text-foreground mb-4">Soil Moisture (%)</h4>
+                  <div className="h-48 bg-muted/30 rounded-lg p-6 relative">
+                    {historicalData.length > 1 ? (
+                      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="moistureGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <polyline
+                          fill="url(#moistureGradient)"
+                          stroke="hsl(var(--chart-2))"
+                          strokeWidth="0.5"
+                          points={historicalData
+                            .map((data, i) => {
+                              const x = (i / (historicalData.length - 1)) * 100;
+                              const y = 100 - (Number(data.soil_moisture) / 100) * 100;
+                              return `${x},${y}`;
+                            })
+                            .join(" ") + ` 100,100 0,100`}
+                        />
+                      </svg>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-12">Collecting data...</p>
+                    )}
+                    {actuators.pump_active && (
+                      <div className="absolute top-4 right-4 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
+                        Pump Active
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* AI Diagnosis Tab */}
+          <TabsContent value="ai" className="space-y-8">
+            <Card className="p-6 border-border/50">
+              <div className="flex items-center gap-3 mb-8">
+                <Leaf className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold text-lg text-foreground">AI Disease Detection</h3>
+              </div>
+
+              <div className="text-center py-10">
+                <Button
+                  onClick={runAIScan}
+                  disabled={isScanning}
+                  size="lg"
+                  className="px-10 py-6 text-base"
+                >
+                  {isScanning ? (
+                    <>
+                      <Activity className="w-5 h-5 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Leaf className="w-5 h-5 mr-2" />
+                      Run Live AI Scan
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {aiResult && (
+                <div className="mt-8 p-6 bg-muted/30 rounded-lg border border-border">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Diagnosis</p>
+                      <p className="text-xl font-semibold text-primary">{aiResult.diagnosis}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Confidence</p>
+                      <p className="text-xl font-semibold text-primary">{aiResult.confidence}%</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Status</p>
+                      <Badge variant={aiResult.diagnosis === "Healthy" ? "default" : "destructive"}>
+                        {aiResult.diagnosis === "Healthy" ? "Normal" : "Action Required"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="pt-6 border-t border-border">
+                    <p className="text-sm font-medium text-foreground mb-3">Recommended Action:</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{aiResult.remedy}</p>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-6 border-border/50">
+              <h3 className="font-semibold text-lg text-foreground mb-6">AI Model Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Model Architecture</p>
+                  <p className="text-foreground font-medium">CNN (MobileNetV2)</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Overall Accuracy</p>
+                  <p className="text-foreground font-medium">96.5%</p>
+                </div>
+                <div className="md:col-span-2">
+                  <p className="text-sm text-muted-foreground mb-3">Detectable Diseases</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">Healthy</Badge>
+                    <Badge variant="secondary">Early Blight</Badge>
+                    <Badge variant="secondary">Late Blight</Badge>
+                    <Badge variant="secondary">Septoria Leaf Spot</Badge>
+                    <Badge variant="secondary">Bacterial Spot</Badge>
+                    <Badge variant="secondary">Target Spot</Badge>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };

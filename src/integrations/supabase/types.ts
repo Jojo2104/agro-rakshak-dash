@@ -14,7 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      actuator_status: {
+        Row: {
+          fans_active: boolean
+          id: string
+          pump_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          fans_active?: boolean
+          id?: string
+          pump_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          fans_active?: boolean
+          id?: string
+          pump_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      sensor_readings: {
+        Row: {
+          created_at: string
+          humidity: number
+          id: string
+          soil_moisture: number
+          temperature: number
+        }
+        Insert: {
+          created_at?: string
+          humidity: number
+          id?: string
+          soil_moisture: number
+          temperature: number
+        }
+        Update: {
+          created_at?: string
+          humidity?: number
+          id?: string
+          soil_moisture?: number
+          temperature?: number
+        }
+        Relationships: []
+      }
+      system_thresholds: {
+        Row: {
+          id: string
+          max_temperature: number
+          min_soil_moisture: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          max_temperature?: number
+          min_soil_moisture?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          max_temperature?: number
+          min_soil_moisture?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

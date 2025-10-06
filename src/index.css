@@ -8,74 +8,71 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 220 17% 17%;
-    --foreground: 160 84% 98%;
+    --background: 0 0% 100%;
+    --foreground: 222 13% 11%;
 
-    --card: 220 15% 20%;
-    --card-foreground: 160 84% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 13% 11%;
 
-    --popover: 220 15% 20%;
-    --popover-foreground: 160 84% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 13% 11%;
 
-    --primary: 160 84% 39%;
-    --primary-foreground: 220 17% 17%;
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 13% 25%;
-    --secondary-foreground: 160 84% 98%;
+    --secondary: 210 17% 95%;
+    --secondary-foreground: 222 13% 11%;
 
-    --muted: 220 13% 25%;
-    --muted-foreground: 160 20% 70%;
+    --muted: 210 17% 95%;
+    --muted-foreground: 215 14% 46%;
 
-    --accent: 160 84% 39%;
-    --accent-foreground: 220 17% 17%;
+    --accent: 142 71% 45%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 160 84% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 30%;
-    --input: 220 13% 25%;
-    --ring: 160 84% 39%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 142 71% 45%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    --chart-1: 160 84% 39%;
+    --chart-1: 142 71% 45%;
     --chart-2: 160 60% 50%;
-    --chart-3: 160 40% 60%;
-    --chart-4: 160 30% 70%;
-    --chart-5: 160 20% 80%;
-
-    --glow-primary: 160 84% 39%;
-    --glow-secondary: 160 60% 50%;
+    --chart-3: 180 40% 55%;
+    --chart-4: 200 30% 60%;
+    --chart-5: 220 20% 65%;
   }
 
   .dark {
-    --background: 220 17% 17%;
-    --foreground: 160 84% 98%;
+    --background: 222 13% 11%;
+    --foreground: 210 17% 95%;
 
-    --card: 220 15% 20%;
-    --card-foreground: 160 84% 98%;
+    --card: 222 13% 13%;
+    --card-foreground: 210 17% 95%;
 
-    --popover: 220 15% 20%;
-    --popover-foreground: 160 84% 98%;
+    --popover: 222 13% 13%;
+    --popover-foreground: 210 17% 95%;
 
-    --primary: 160 84% 39%;
-    --primary-foreground: 220 17% 17%;
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 13% 25%;
-    --secondary-foreground: 160 84% 98%;
+    --secondary: 222 13% 18%;
+    --secondary-foreground: 210 17% 95%;
 
-    --muted: 220 13% 25%;
-    --muted-foreground: 160 20% 70%;
+    --muted: 222 13% 18%;
+    --muted-foreground: 215 14% 65%;
 
-    --accent: 160 84% 39%;
-    --accent-foreground: 220 17% 17%;
+    --accent: 142 71% 45%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 160 84% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 30%;
-    --input: 220 13% 25%;
-    --ring: 160 84% 39%;
+    --border: 222 13% 20%;
+    --input: 222 13% 18%;
+    --ring: 142 71% 45%;
   }
 }
 
@@ -85,25 +82,11 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
-}
-
-@layer utilities {
-  .glow-primary {
-    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3);
-  }
   
-  .glow-secondary {
-    box-shadow: 0 0 15px hsl(var(--glow-secondary) / 0.2);
-  }
-
-  .gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.7) 100%);
-  }
-
-  .gradient-card {
-    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--secondary)) 100%);
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
   }
 }
