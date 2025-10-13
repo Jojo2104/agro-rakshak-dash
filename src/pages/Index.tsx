@@ -261,16 +261,10 @@ const Index = () => {
     }, 2500);
   };
 
-  if (!latestSensorData || !actuators || !thresholds) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center space-y-4">
-          <Activity className="w-12 h-12 mx-auto animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading system data...</p>
-        </div>
-      </div>
-    );
-  }
+  // Show UI even if no sensor data yet - user needs to start simulator
+  const displayTemp = latestSensorData?.temperature ?? 0;
+  const displayHumidity = latestSensorData?.humidity ?? 0;
+  const displaySoilMoisture = latestSensorData?.soil_moisture ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -359,13 +353,13 @@ const Index = () => {
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Thermometer className="w-6 h-6 text-primary" />
                   </div>
-                  <Badge variant={Number(latestSensorData.temperature) > thresholds.max_temperature ? "destructive" : "secondary"}>
-                    {Number(latestSensorData.temperature) > thresholds.max_temperature ? "High" : "Normal"}
+                  <Badge variant={displayTemp > (thresholds?.max_temperature ?? 32) ? "destructive" : "secondary"}>
+                    {displayTemp > (thresholds?.max_temperature ?? 32) ? "High" : "Normal"}
                   </Badge>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Temperature</p>
-                  <p className="text-4xl font-semibold text-foreground">{latestSensorData.temperature}°C</p>
+                  <p className="text-4xl font-semibold text-foreground">{displayTemp.toFixed(1)}°C</p>
                 </div>
               </Card>
 
@@ -378,7 +372,7 @@ const Index = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Humidity</p>
-                  <p className="text-4xl font-semibold text-foreground">{latestSensorData.humidity}%</p>
+                  <p className="text-4xl font-semibold text-foreground">{displayHumidity.toFixed(1)}%</p>
                 </div>
               </Card>
 
@@ -387,13 +381,13 @@ const Index = () => {
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Droplets className="w-6 h-6 text-primary" />
                   </div>
-                  <Badge variant={Number(latestSensorData.soil_moisture) < thresholds.min_soil_moisture ? "destructive" : "secondary"}>
-                    {Number(latestSensorData.soil_moisture) < thresholds.min_soil_moisture ? "Low" : "Normal"}
+                  <Badge variant={displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "destructive" : "secondary"}>
+                    {displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "Low" : "Normal"}
                   </Badge>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Soil Moisture</p>
-                  <p className="text-4xl font-semibold text-foreground">{latestSensorData.soil_moisture}%</p>
+                  <p className="text-4xl font-semibold text-foreground">{displaySoilMoisture.toFixed(1)}%</p>
                 </div>
               </Card>
             </div>
@@ -404,10 +398,10 @@ const Index = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
-                      actuators.pump_active ? 'bg-primary/10' : 'bg-muted'
+                      actuators?.pump_active ? 'bg-primary/10' : 'bg-muted'
                     }`}>
                       <Droplets className={`w-7 h-7 ${
-                        actuators.pump_active ? 'text-primary' : 'text-muted-foreground'
+                        actuators?.pump_active ? 'text-primary' : 'text-muted-foreground'
                       }`} />
                     </div>
                     <div>
@@ -415,8 +409,8 @@ const Index = () => {
                       <p className="text-sm text-muted-foreground">Irrigation System</p>
                     </div>
                   </div>
-                  <Badge variant={actuators.pump_active ? "default" : "secondary"} className="text-sm px-3 py-1">
-                    {actuators.pump_active ? "ON" : "OFF"}
+                  <Badge variant={actuators?.pump_active ? "default" : "secondary"} className="text-sm px-3 py-1">
+                    {actuators?.pump_active ? "ON" : "OFF"}
                   </Badge>
                 </div>
               </Card>
@@ -425,10 +419,10 @@ const Index = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
-                      actuators.fans_active ? 'bg-primary/10' : 'bg-muted'
+                      actuators?.fans_active ? 'bg-primary/10' : 'bg-muted'
                     }`}>
                       <Wind className={`w-7 h-7 ${
-                        actuators.fans_active ? 'text-primary' : 'text-muted-foreground'
+                        actuators?.fans_active ? 'text-primary' : 'text-muted-foreground'
                       }`} />
                     </div>
                     <div>
@@ -436,8 +430,8 @@ const Index = () => {
                       <p className="text-sm text-muted-foreground">Climate Control</p>
                     </div>
                   </div>
-                  <Badge variant={actuators.fans_active ? "default" : "secondary"} className="text-sm px-3 py-1">
-                    {actuators.fans_active ? "ON" : "OFF"}
+                  <Badge variant={actuators?.fans_active ? "default" : "secondary"} className="text-sm px-3 py-1">
+                    {actuators?.fans_active ? "ON" : "OFF"}
                   </Badge>
                 </div>
               </Card>
@@ -487,10 +481,10 @@ const Index = () => {
               <div className="space-y-8">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-4 block">
-                    Maximum Temperature Threshold: {thresholds.max_temperature}°C
+                    Maximum Temperature Threshold: {thresholds?.max_temperature ?? 32}°C
                   </label>
                   <Slider
-                    value={[Number(thresholds.max_temperature)]}
+                    value={[Number(thresholds?.max_temperature ?? 32)]}
                     onValueChange={(value) => updateThreshold('max_temperature', value[0])}
                     min={25}
                     max={40}
@@ -504,10 +498,10 @@ const Index = () => {
 
                 <div>
                   <label className="text-sm font-medium text-foreground mb-4 block">
-                    Minimum Soil Moisture Threshold: {thresholds.min_soil_moisture}%
+                    Minimum Soil Moisture Threshold: {thresholds?.min_soil_moisture ?? 50}%
                   </label>
                   <Slider
-                    value={[Number(thresholds.min_soil_moisture)]}
+                    value={[Number(thresholds?.min_soil_moisture ?? 50)]}
                     onValueChange={(value) => updateThreshold('min_soil_moisture', value[0])}
                     min={30}
                     max={70}
@@ -530,22 +524,22 @@ const Index = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Button
                   onClick={() => toggleActuator("pump_active")}
-                  variant={actuators.pump_active ? "default" : "outline"}
+                  variant={actuators?.pump_active ? "default" : "outline"}
                   size="lg"
                   className="h-28 flex-col gap-3"
                 >
                   <Droplets className="w-7 h-7" />
-                  <span className="text-base">Water Pump: {actuators.pump_active ? "ON" : "OFF"}</span>
+                  <span className="text-base">Water Pump: {actuators?.pump_active ? "ON" : "OFF"}</span>
                 </Button>
 
                 <Button
                   onClick={() => toggleActuator("fans_active")}
-                  variant={actuators.fans_active ? "default" : "outline"}
+                  variant={actuators?.fans_active ? "default" : "outline"}
                   size="lg"
                   className="h-28 flex-col gap-3"
                 >
                   <Wind className="w-7 h-7" />
-                  <span className="text-base">Cooling Fans: {actuators.fans_active ? "ON" : "OFF"}</span>
+                  <span className="text-base">Cooling Fans: {actuators?.fans_active ? "ON" : "OFF"}</span>
                 </Button>
               </div>
             </Card>
@@ -587,7 +581,7 @@ const Index = () => {
                     ) : (
                       <p className="text-sm text-muted-foreground text-center py-12">Collecting data...</p>
                     )}
-                    {actuators.fans_active && (
+                    {actuators?.fans_active && (
                       <div className="absolute top-4 right-4 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
                         Fans Active
                       </div>
@@ -622,7 +616,7 @@ const Index = () => {
                     ) : (
                       <p className="text-sm text-muted-foreground text-center py-12">Collecting data...</p>
                     )}
-                    {actuators.pump_active && (
+                    {actuators?.pump_active && (
                       <div className="absolute top-4 right-4 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
                         Pump Active
                       </div>
