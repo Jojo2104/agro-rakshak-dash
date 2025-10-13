@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { 
   Thermometer, 
   Droplets, 
@@ -13,7 +14,9 @@ import {
   TrendingUp,
   Settings,
   Leaf,
-  Bell
+  Bell,
+  Menu,
+  BarChart
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -284,10 +287,55 @@ const Index = () => {
                 <p className="text-muted-foreground mt-1">Smart Agriculture System</p>
               </div>
             </div>
-            <Badge variant="outline" className="px-4 py-2 border-primary/30">
-              <Activity className="w-3 h-3 mr-2 text-primary" />
-              Live
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="px-4 py-2 border-primary/30 hidden md:flex">
+                <Activity className="w-3 h-3 mr-2 text-primary" />
+                Live
+              </Badge>
+              
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent>
+                  <SheetHeader>
+                    <SheetTitle>Navigation</SheetTitle>
+                  </SheetHeader>
+                  <nav className="flex flex-col gap-2 mt-6">
+                    <Button variant="ghost" className="justify-start" onClick={() => {
+                      const element = document.querySelector('[value="dashboard"]');
+                      element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    }}>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Dashboard
+                    </Button>
+                    <Button variant="ghost" className="justify-start" onClick={() => {
+                      const element = document.querySelector('[value="control"]');
+                      element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    }}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Control
+                    </Button>
+                    <Button variant="ghost" className="justify-start" onClick={() => {
+                      const element = document.querySelector('[value="analytics"]');
+                      element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    }}>
+                      <BarChart className="mr-2 h-4 w-4" />
+                      Analytics
+                    </Button>
+                    <Button variant="ghost" className="justify-start" onClick={() => {
+                      const element = document.querySelector('[value="ai"]');
+                      element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    }}>
+                      <TrendingUp className="mr-2 h-4 w-4" />
+                      AI Diagnosis
+                    </Button>
+                  </nav>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         </header>
 
