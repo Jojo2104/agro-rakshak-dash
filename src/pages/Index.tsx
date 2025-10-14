@@ -5,6 +5,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { 
   Thermometer, 
   Droplets, 
@@ -65,6 +66,20 @@ const Index = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [aiResult, setAIResult] = useState<AIResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  
+  // Toggle states for each component with glow effect
+  const [toggleStates, setToggleStates] = useState({
+    temperature: true,
+    humidity: true,
+    soilMoisture: true,
+    waterPump: true,
+    coolingFans: true,
+    notifications: true,
+  });
+
+  const toggleComponent = (key: keyof typeof toggleStates) => {
+    setToggleStates(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Fetch initial data
   useEffect(() => {
@@ -348,14 +363,17 @@ const Index = () => {
 
             {/* Sensor Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="p-6 border-border/50">
+              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.temperature ? 'card-glow' : ''}`}>
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Thermometer className="w-6 h-6 text-primary" />
                   </div>
-                  <Badge variant={displayTemp > (thresholds?.max_temperature ?? 32) ? "destructive" : "secondary"}>
-                    {displayTemp > (thresholds?.max_temperature ?? 32) ? "High" : "Normal"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={displayTemp > (thresholds?.max_temperature ?? 32) ? "destructive" : "secondary"}>
+                      {displayTemp > (thresholds?.max_temperature ?? 32) ? "High" : "Normal"}
+                    </Badge>
+                    <Switch checked={toggleStates.temperature} onCheckedChange={() => toggleComponent('temperature')} />
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Temperature</p>
@@ -363,12 +381,15 @@ const Index = () => {
                 </div>
               </Card>
 
-              <Card className="p-6 border-border/50">
+              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.humidity ? 'card-glow' : ''}`}>
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Droplets className="w-6 h-6 text-primary" />
                   </div>
-                  <Badge variant="secondary">Normal</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">Normal</Badge>
+                    <Switch checked={toggleStates.humidity} onCheckedChange={() => toggleComponent('humidity')} />
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Humidity</p>
@@ -376,14 +397,17 @@ const Index = () => {
                 </div>
               </Card>
 
-              <Card className="p-6 border-border/50">
+              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.soilMoisture ? 'card-glow' : ''}`}>
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Droplets className="w-6 h-6 text-primary" />
                   </div>
-                  <Badge variant={displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "destructive" : "secondary"}>
-                    {displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "Low" : "Normal"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "destructive" : "secondary"}>
+                      {displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "Low" : "Normal"}
+                    </Badge>
+                    <Switch checked={toggleStates.soilMoisture} onCheckedChange={() => toggleComponent('soilMoisture')} />
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Soil Moisture</p>
@@ -394,8 +418,8 @@ const Index = () => {
 
             {/* Actuator Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="p-6 border-border/50">
-                <div className="flex items-center justify-between">
+              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.waterPump ? 'card-glow' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
                       actuators?.pump_active ? 'bg-primary/10' : 'bg-muted'
@@ -409,14 +433,17 @@ const Index = () => {
                       <p className="text-sm text-muted-foreground">Irrigation System</p>
                     </div>
                   </div>
-                  <Badge variant={actuators?.pump_active ? "default" : "secondary"} className="text-sm px-3 py-1">
-                    {actuators?.pump_active ? "ON" : "OFF"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={actuators?.pump_active ? "default" : "secondary"} className="text-sm px-3 py-1">
+                      {actuators?.pump_active ? "ON" : "OFF"}
+                    </Badge>
+                    <Switch checked={toggleStates.waterPump} onCheckedChange={() => toggleComponent('waterPump')} />
+                  </div>
                 </div>
               </Card>
 
-              <Card className="p-6 border-border/50">
-                <div className="flex items-center justify-between">
+              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.coolingFans ? 'card-glow' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
                       actuators?.fans_active ? 'bg-primary/10' : 'bg-muted'
@@ -430,18 +457,24 @@ const Index = () => {
                       <p className="text-sm text-muted-foreground">Climate Control</p>
                     </div>
                   </div>
-                  <Badge variant={actuators?.fans_active ? "default" : "secondary"} className="text-sm px-3 py-1">
-                    {actuators?.fans_active ? "ON" : "OFF"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={actuators?.fans_active ? "default" : "secondary"} className="text-sm px-3 py-1">
+                      {actuators?.fans_active ? "ON" : "OFF"}
+                    </Badge>
+                    <Switch checked={toggleStates.coolingFans} onCheckedChange={() => toggleComponent('coolingFans')} />
+                  </div>
                 </div>
               </Card>
             </div>
 
             {/* Notifications */}
-            <Card className="p-6 border-border/50">
-              <div className="flex items-center gap-3 mb-6">
-                <Bell className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-lg text-foreground">System Notifications</h3>
+            <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.notifications ? 'card-glow' : ''}`}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Bell className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold text-lg text-foreground">System Notifications</h3>
+                </div>
+                <Switch checked={toggleStates.notifications} onCheckedChange={() => toggleComponent('notifications')} />
               </div>
               <div className="space-y-3 max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
