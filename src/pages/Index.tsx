@@ -363,7 +363,7 @@ const Index = () => {
 
             {/* Sensor Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.temperature ? 'card-glow' : ''}`}>
+              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Thermometer className="w-6 h-6 text-primary" />
@@ -381,7 +381,7 @@ const Index = () => {
                 </div>
               </Card>
 
-              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.humidity ? 'card-glow' : ''}`}>
+              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Droplets className="w-6 h-6 text-primary" />
@@ -397,7 +397,7 @@ const Index = () => {
                 </div>
               </Card>
 
-              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.soilMoisture ? 'card-glow' : ''}`}>
+              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
                 <div className="flex items-start justify-between mb-6">
                   <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Droplets className="w-6 h-6 text-primary" />
@@ -418,7 +418,7 @@ const Index = () => {
 
             {/* Actuator Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.waterPump ? 'card-glow' : ''}`}>
+              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
@@ -442,7 +442,7 @@ const Index = () => {
                 </div>
               </Card>
 
-              <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.coolingFans ? 'card-glow' : ''}`}>
+              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
@@ -468,7 +468,7 @@ const Index = () => {
             </div>
 
             {/* Notifications */}
-            <Card className={`p-6 border-border/50 transition-all duration-300 ${toggleStates.notifications ? 'card-glow' : ''}`}>
+            <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <Bell className="w-5 h-5 text-primary" />
