@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -59,6 +60,7 @@ interface AIResult {
 }
 
 const Index = () => {
+  const navigate = useNavigate();
   const [latestSensorData, setLatestSensorData] = useState<SensorData | null>(null);
   const [historicalData, setHistoricalData] = useState<SensorData[]>([]);
   const [actuators, setActuators] = useState<ActuatorStatus | null>(null);
@@ -297,6 +299,9 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={() => navigate("/")}>
+                Back to Home
+              </Button>
               <Badge variant="outline" className="px-4 py-2 border-primary/30 hidden md:flex">
                 <Activity className="w-3 h-3 mr-2 text-primary" />
                 Live
