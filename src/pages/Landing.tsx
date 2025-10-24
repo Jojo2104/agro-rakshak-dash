@@ -57,7 +57,7 @@ const Landing = () => {
               <Button size="lg" onClick={() => navigate("/dashboard")} className="text-lg px-8">
                 Launch Dashboard
               </Button>
-              <Button size="lg" variant="outline" className="text-lg px-8">
+              <Button size="lg" variant="outline" onClick={() => navigate("/about")} className="text-lg px-8">
                 Learn More
               </Button>
             </div>
