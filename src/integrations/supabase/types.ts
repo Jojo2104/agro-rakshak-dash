@@ -101,6 +101,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_profile: {
+        Row: {
+          created_at: string
+          crop: string
+          id: string
+          pincode: string
+          region: string
+          season: string
+          soil_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          crop: string
+          id: string
+          pincode: string
+          region: string
+          season: string
+          soil_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          crop?: string
+          id?: string
+          pincode?: string
+          region?: string
+          season?: string
+          soil_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

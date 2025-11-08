@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -21,7 +22,6 @@ import {
   BarChart
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { IoTSimulator } from "@/components/IoTSimulator";
 
 interface SensorData {
@@ -61,6 +61,7 @@ interface AIResult {
 
 const Index = () => {
   const navigate = useNavigate();
+  const [userId, setUserId] = useState<string | null>(null);
   const [latestSensorData, setLatestSensorData] = useState<SensorData | null>(null);
   const [historicalData, setHistoricalData] = useState<SensorData[]>([]);
   const [actuators, setActuators] = useState<ActuatorStatus | null>(null);
@@ -163,7 +164,7 @@ const Index = () => {
       supabase.removeChannel(thresholdChannel);
       supabase.removeChannel(notificationChannel);
     };
-  }, []);
+  }, [userId]);
 
   const fetchLatestSensorData = async () => {
     const { data } = await supabase
@@ -299,8 +300,14 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={() => navigate("/")}>
-                Back to Home
+              <Button 
+                variant="outline" 
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate("/");
+                }}
+              >
+                Sign Out
               </Button>
               <Badge variant="outline" className="px-4 py-2 border-primary/30 hidden md:flex">
                 <Activity className="w-3 h-3 mr-2 text-primary" />

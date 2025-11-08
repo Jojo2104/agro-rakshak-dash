@@ -54,7 +54,7 @@ const Landing = () => {
               to help you monitor and protect your crops with precision.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={() => navigate("/dashboard")} className="text-lg px-8">
+              <Button size="lg" onClick={() => navigate("/login")} className="text-lg px-8">
                 Launch Dashboard
               </Button>
               <Button size="lg" variant="outline" onClick={() => navigate("/about")} className="text-lg px-8">
@@ -110,7 +110,7 @@ const Landing = () => {
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 Join the future of agriculture with AgroRakshak's intelligent monitoring system
               </p>
-              <Button size="lg" onClick={() => navigate("/dashboard")} className="text-lg px-8">
+              <Button size="lg" onClick={() => navigate("/login")} className="text-lg px-8">
                 Get Started Now
               </Button>
             </CardContent>
