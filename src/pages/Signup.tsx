@@ -43,7 +43,7 @@ const Signup = () => {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/survey`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -55,7 +55,7 @@ const Signup = () => {
 
     if (data.user) {
       toast.success("Account created successfully!");
-      navigate("/survey");
+      navigate("/auth/callback");
     }
     setLoading(false);
   };
