@@ -57,18 +57,16 @@ const Login = () => {
     setLoading(false);
   };
 
-  const handleGoogleLogin = async () => {
+     const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: "https://agro-rakshak-dash.vercel.app/auth/callback",
-      },
+      provider: "google"
     });
 
     if (error) {
       toast.error(error.message);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
