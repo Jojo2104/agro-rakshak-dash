@@ -11,11 +11,13 @@ import Signup from "./pages/Signup";
 import Survey from "./pages/Survey";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
+import LiveSensorData from "@/components/LiveSensorData";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+
     <TooltipProvider>
       <Toaster />
       <Sonner />

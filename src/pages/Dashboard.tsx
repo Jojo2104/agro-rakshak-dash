@@ -1,4 +1,50 @@
-import { useState, useEffect } from "react";
+          {/* Live Sensors Tab */}
+          <TabsContent value="sensors" className="space-y-8">
+            <Card className="p-6 border-border/50 bg-gradient-to-br from-green-500/5 to-green-500/10">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-xl text-foreground mb-2">
+                    ESP32 Hardware Sensors
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Real-time data from your physical ESP32 device via Firebase
+                  </p>
+                </div>
+                <Badge variant="default" className="bg-green-500">
+                  <Activity className="w-3 h-3 mr-1 animate-pulse" />
+                  Hardware
+                </Badge>
+              </div>
+            </Card>
+
+            <LiveSensorData />
+
+            <Card className="p-6 border-border/50 bg-muted/20">
+              <h3 className="font-semibold text-lg text-foreground mb-4 flex items-center">
+                <Info className="w-5 h-5 mr-2 text-primary" />
+                Setup Instructions
+              </h3>
+              <ol className="space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">1</span>
+                  <span>Connect your ESP32 device to your laptop via USB</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">2</span>
+                  <span>Run the bridge script: <code className="bg-muted px-2 py-1 rounded">python agrorakshak_bridge.py</code></span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">3</span>
+                  <span>Data will automatically flow: ESP32 → Laptop → Firebase → This Dashboard</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">4</span>
+                  <span>Monitor live sensor readings updated every ~5 seconds</span>
+                </li>
+              </ol>
+            </Card>
+          </TabsContent>
+          import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -8,6 +54,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { Brain, Info } from "lucide-react";
+import LiveSensorData from '@/components/LiveSensorData';
+import AgroChatbot from '@/components/AgroChatbot'; // Adjust path as needed
 import { 
   Thermometer, 
   Droplets, 
@@ -22,14 +71,14 @@ import {
   BarChart
 } from "lucide-react";
 import { toast } from "sonner";
-import { IoTSimulator } from "@/components/IoTSimulator";
+import { getDatabase, ref, onValue, set } from "firebase/database";
+import { app } from "@/lib/firebase";
 
-interface SensorData {
-  id: string;
+interface FirebaseSensorData {
   temperature: number;
   humidity: number;
-  soil_moisture: number;
-  created_at: string;
+  soilMoisture: number;
+  timestamp: number;
 }
 
 interface ActuatorStatus {
@@ -53,24 +102,15 @@ interface Notification {
   created_at: string;
 }
 
-interface AIResult {
-  diagnosis: string;
-  confidence: number;
-  remedy: string;
-}
-
 const Index = () => {
   const navigate = useNavigate();
-  const [userId, setUserId] = useState<string | null>(null);
-  const [latestSensorData, setLatestSensorData] = useState<SensorData | null>(null);
-  const [historicalData, setHistoricalData] = useState<SensorData[]>([]);
+  const [firebaseSensorData, setFirebaseSensorData] = useState<FirebaseSensorData | null>(null);
+  const [historicalData, setHistoricalData] = useState<FirebaseSensorData[]>([]);
   const [actuators, setActuators] = useState<ActuatorStatus | null>(null);
   const [thresholds, setThresholds] = useState<Thresholds | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [aiResult, setAIResult] = useState<AIResult | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  
-  // Toggle states for each component with glow effect
+
+  // Toggle states for each component
   const [toggleStates, setToggleStates] = useState({
     temperature: true,
     humidity: true,
@@ -84,33 +124,103 @@ const Index = () => {
     setToggleStates(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Firebase real-time listener for sensor data
+  useEffect(() => {
+    const db = getDatabase(app);
+    const sensorRef = ref(db, 'esp32_001');
+    
+    const unsubscribe = onValue(sensorRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const newData: FirebaseSensorData = {
+          temperature: data.temperature || 0,
+          humidity: data.humidity || 0,
+          soilMoisture: data.soilMoisture || 0,
+          timestamp: data.timestamp || Date.now()
+        };
+        
+        setFirebaseSensorData(newData);
+        
+        // Add to historical data (keep last 24 readings)
+        setHistoricalData(prev => {
+          const updated = [...prev, newData];
+          return updated.slice(-24);
+        });
+
+        // Check thresholds ONLY if we have valid threshold data
+        if (thresholds && actuators) {
+          checkThresholdsAndNotify(newData);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [thresholds, actuators]);
+
+  // Check thresholds and create notifications based on real sensor data
+  const checkThresholdsAndNotify = async (data: FirebaseSensorData) => {
+    if (!thresholds) return;
+
+    // Check temperature threshold
+    if (data.temperature > thresholds.max_temperature) {
+      const message = `High temperature detected: ${data.temperature.toFixed(1)}°C (Threshold: ${thresholds.max_temperature}°C)`;
+      await createNotification(message, 'warning');
+      
+      // Auto-activate fans if not already active
+      if (actuators && !actuators.fans_active) {
+        await toggleActuator('fans_active');
+      }
+    }
+
+    // Check soil moisture threshold
+    if (data.soilMoisture < thresholds.min_soil_moisture) {
+      const message = `Low soil moisture: ${data.soilMoisture.toFixed(1)}% (Threshold: ${thresholds.min_soil_moisture}%)`;
+      await createNotification(message, 'warning');
+      
+      // Auto-activate pump if not already active
+      if (actuators && !actuators.pump_active) {
+        await toggleActuator('pump_active');
+      }
+    }
+
+    // Normal conditions notification (optional, less frequent)
+    if (data.temperature <= thresholds.max_temperature && 
+        data.soilMoisture >= thresholds.min_soil_moisture) {
+      // You can add success notifications here if needed
+    }
+  };
+
+  // Create notification in Supabase
+  const createNotification = async (message: string, type: "info" | "warning" | "success") => {
+    // Check if similar notification exists in last minute to avoid spam
+    const recentNotif = notifications.find((n: Notification) => 
+      n.message === message && 
+      Date.now() - new Date(n.created_at).getTime() < 60000
+    );
+    
+    if (recentNotif) return;
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({ message, type })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setNotifications((prev: Notification[]) => [data as Notification, ...prev.slice(0, 9)]);
+      toast[type](message);
+    }
+  };
+
   // Fetch initial data
   useEffect(() => {
-    fetchLatestSensorData();
-    fetchHistoricalData();
     fetchActuatorStatus();
     fetchThresholds();
     fetchNotifications();
   }, []);
 
-  // Set up realtime subscriptions
+  // Set up realtime subscriptions for actuators, thresholds, and notifications
   useEffect(() => {
-    const sensorChannel = supabase
-      .channel('sensor-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'sensor_readings'
-        },
-        (payload) => {
-          setLatestSensorData(payload.new as SensorData);
-          setHistoricalData(prev => [...prev.slice(-23), payload.new as SensorData]);
-        }
-      )
-      .subscribe();
-
     const actuatorChannel = supabase
       .channel('actuator-changes')
       .on(
@@ -159,33 +269,11 @@ const Index = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(sensorChannel);
       supabase.removeChannel(actuatorChannel);
       supabase.removeChannel(thresholdChannel);
       supabase.removeChannel(notificationChannel);
     };
-  }, [userId]);
-
-  const fetchLatestSensorData = async () => {
-    const { data } = await supabase
-      .from('sensor_readings')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (data) setLatestSensorData(data);
-  };
-
-  const fetchHistoricalData = async () => {
-    const { data } = await supabase
-      .from('sensor_readings')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(24);
-    
-    if (data) setHistoricalData(data.reverse());
-  };
+  }, []);
 
   const fetchActuatorStatus = async () => {
     const { data } = await supabase
@@ -220,15 +308,23 @@ const Index = () => {
   const updateThreshold = async (field: 'max_temperature' | 'min_soil_moisture', value: number) => {
     if (!thresholds) return;
 
-    const { error } = await supabase
-      .from('system_thresholds')
-      .update({ [field]: value })
-      .eq('id', thresholds.id);
+    try {
+      // Update Supabase first
+      const { error } = await supabase
+        .from('system_thresholds')
+        .update({ [field]: value })
+        .eq('id', thresholds.id);
 
-    if (error) {
+      if (error) {
+        toast.error('Failed to update threshold');
+        return;
+      }
+      
+      toast.success(`Threshold updated to ${value}`);
+      
+    } catch (err) {
+      console.error('Threshold update error:', err);
       toast.error('Failed to update threshold');
-    } else {
-      toast.success('Threshold updated');
     }
   };
 
@@ -236,53 +332,47 @@ const Index = () => {
     if (!actuators) return;
 
     const newValue = !actuators[field];
-    const { error } = await supabase
-      .from('actuator_status')
-      .update({ [field]: newValue })
-      .eq('id', actuators.id);
-
-    if (error) {
-      toast.error('Failed to update actuator');
-    } else {
-      const actuatorName = field === 'pump_active' ? 'Water Pump' : 'Cooling Fans';
-      await supabase.from('notifications').insert({
-        message: `Manual override: ${actuatorName} ${newValue ? 'activated' : 'deactivated'}`,
-        type: 'info'
+    const actuatorName = field === 'pump_active' ? 'Water Pump' : 'Cooling Fans';
+    
+    try {
+      // SEND COMMAND TO FIREBASE for ESP32 control
+      const db = getDatabase(app);
+      const controlRef = ref(db, 'esp32_001/controlCommands');
+      
+      await set(controlRef, {
+        pump: field === 'pump_active' ? newValue : actuators.pump_active,
+        fan: field === 'fans_active' ? newValue : actuators.fans_active,
+        timestamp: Date.now()
       });
+      
+      // Update Supabase
+      const { error } = await supabase
+        .from('actuator_status')
+        .update({ [field]: newValue })
+        .eq('id', actuators.id);
+
+      if (error) {
+        console.error('Supabase update error:', error);
+      }
+      
+      // Create notification
+      await createNotification(
+        `Manual override: ${actuatorName} ${newValue ? 'activated' : 'deactivated'}`,
+        'info'
+      );
+      
+      toast.success(`${actuatorName} ${newValue ? 'activated' : 'deactivated'}`);
+      
+    } catch (firebaseError) {
+      console.error('Firebase control error:', firebaseError);
+      toast.error('Failed to send command to ESP32');
     }
   };
 
-  const runAIScan = () => {
-    setIsScanning(true);
-    
-    setTimeout(() => {
-      const diseases = [
-        { name: "Healthy", confidence: 98.5, remedy: "Continue regular maintenance and monitoring." },
-        { name: "Early Blight", confidence: 96.3, remedy: "Apply fungicide containing chlorothalonil. Remove affected leaves and improve air circulation." },
-        { name: "Late Blight", confidence: 94.7, remedy: "Use copper-based fungicides. Ensure proper drainage and avoid overhead watering." },
-        { name: "Septoria Leaf Spot", confidence: 93.2, remedy: "Remove infected foliage. Apply fungicide and maintain plant spacing for better airflow." },
-        { name: "Bacterial Spot", confidence: 91.8, remedy: "Use copper spray. Remove affected plants and practice crop rotation." },
-      ];
-
-      const result = diseases[Math.floor(Math.random() * diseases.length)];
-      setAIResult({
-        diagnosis: result.name,
-        confidence: result.confidence,
-        remedy: result.remedy,
-      });
-      setIsScanning(false);
-      
-      supabase.from('notifications').insert({
-        message: `AI Scan complete: ${result.name} detected`,
-        type: 'success'
-      });
-    }, 2500);
-  };
-
-  // Show UI even if no sensor data yet - user needs to start simulator
-  const displayTemp = latestSensorData?.temperature ?? 0;
-  const displayHumidity = latestSensorData?.humidity ?? 0;
-  const displaySoilMoisture = latestSensorData?.soil_moisture ?? 0;
+  // Use Firebase sensor data for display
+  const displayTemp = firebaseSensorData?.temperature ?? 0;
+  const displayHumidity = firebaseSensorData?.humidity ?? 0;
+  const displaySoilMoisture = firebaseSensorData?.soilMoisture ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -310,8 +400,8 @@ const Index = () => {
                 Sign Out
               </Button>
               <Badge variant="outline" className="px-4 py-2 border-primary/30 hidden md:flex">
-                <Activity className="w-3 h-3 mr-2 text-primary" />
-                Live
+                <Activity className="w-3 h-3 mr-2 text-primary animate-pulse" />
+                Live Hardware
               </Badge>
               
               <Sheet>
@@ -340,12 +430,12 @@ const Index = () => {
                       Control
                     </Button>
                     <Button variant="ghost" className="justify-start" onClick={() => {
-                      const element = document.querySelector('[value="analytics"]');
-                      element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                    }}>
-                      <BarChart className="mr-2 h-4 w-4" />
-                      Analytics
-                    </Button>
+  const element = document.querySelector('[value="agroai"]');
+  element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+}}>
+  <Brain className="mr-2 h-4 w-4" />
+  AgroAI
+</Button>
                     <Button variant="ghost" className="justify-start" onClick={() => {
                       const element = document.querySelector('[value="ai"]');
                       element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -361,136 +451,50 @@ const Index = () => {
         </header>
 
         <Tabs defaultValue="dashboard" className="space-y-8">
-          <TabsList className="w-full max-w-2xl bg-muted">
+          <TabsList className="w-full max-w-3xl bg-muted">
             <TabsTrigger value="dashboard" className="flex-1">Dashboard</TabsTrigger>
             <TabsTrigger value="control" className="flex-1">Control</TabsTrigger>
-            <TabsTrigger value="analytics" className="flex-1">Analytics</TabsTrigger>
-            <TabsTrigger value="ai" className="flex-1">AI Diagnosis</TabsTrigger>
+            <TabsTrigger value="agroai" className="flex-1">AgroAI</TabsTrigger>            <TabsTrigger value="ai" className="flex-1">AI Diagnosis</TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-8">
-            {/* IoT Simulator */}
-            <IoTSimulator />
-
-            {/* Sensor Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Thermometer className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={displayTemp > (thresholds?.max_temperature ?? 32) ? "destructive" : "secondary"}>
-                      {displayTemp > (thresholds?.max_temperature ?? 32) ? "High" : "Normal"}
-                    </Badge>
-                    <Switch checked={toggleStates.temperature} onCheckedChange={() => toggleComponent('temperature')} />
-                  </div>
-                </div>
+            {/* ESP32 Hardware Sensors Header */}
+            <Card className="p-6 border-border/50 bg-gradient-to-br from-green-500/5 to-green-500/10">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Temperature</p>
-                  <p className="text-4xl font-semibold text-foreground">{displayTemp.toFixed(1)}°C</p>
+                  <h3 className="font-semibold text-xl text-foreground mb-2">
+                    ESP32 Hardware Sensors
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Real-time data from your physical ESP32 device via Firebase
+                  </p>
                 </div>
-              </Card>
+                <Badge variant="default" className="bg-green-500">
+                  <Activity className="w-3 h-3 mr-1 animate-pulse" />
+                  Hardware
+                </Badge>
+              </div>
+            </Card>
 
-              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Droplets className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Normal</Badge>
-                    <Switch checked={toggleStates.humidity} onCheckedChange={() => toggleComponent('humidity')} />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Humidity</p>
-                  <p className="text-4xl font-semibold text-foreground">{displayHumidity.toFixed(1)}%</p>
-                </div>
-              </Card>
+            {/* Firebase Live Sensor Component */}
+            <LiveSensorData />
 
-              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Droplets className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "destructive" : "secondary"}>
-                      {displaySoilMoisture < (thresholds?.min_soil_moisture ?? 50) ? "Low" : "Normal"}
-                    </Badge>
-                    <Switch checked={toggleStates.soilMoisture} onCheckedChange={() => toggleComponent('soilMoisture')} />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Soil Moisture</p>
-                  <p className="text-4xl font-semibold text-foreground">{displaySoilMoisture.toFixed(1)}%</p>
-                </div>
-              </Card>
-            </div>
-
-            {/* Actuator Status */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
-                      actuators?.pump_active ? 'bg-primary/10' : 'bg-muted'
-                    }`}>
-                      <Droplets className={`w-7 h-7 ${
-                        actuators?.pump_active ? 'text-primary' : 'text-muted-foreground'
-                      }`} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground">Water Pump</h3>
-                      <p className="text-sm text-muted-foreground">Irrigation System</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={actuators?.pump_active ? "default" : "secondary"} className="text-sm px-3 py-1">
-                      {actuators?.pump_active ? "ON" : "OFF"}
-                    </Badge>
-                    <Switch checked={toggleStates.waterPump} onCheckedChange={() => toggleComponent('waterPump')} />
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-lg flex items-center justify-center transition-colors ${
-                      actuators?.fans_active ? 'bg-primary/10' : 'bg-muted'
-                    }`}>
-                      <Wind className={`w-7 h-7 ${
-                        actuators?.fans_active ? 'text-primary' : 'text-muted-foreground'
-                      }`} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground">Cooling Fans</h3>
-                      <p className="text-sm text-muted-foreground">Climate Control</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={actuators?.fans_active ? "default" : "secondary"} className="text-sm px-3 py-1">
-                      {actuators?.fans_active ? "ON" : "OFF"}
-                    </Badge>
-                    <Switch checked={toggleStates.coolingFans} onCheckedChange={() => toggleComponent('coolingFans')} />
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* Notifications */}
+            {/* Notifications - Based on Real Sensor Data */}
             <Card className="p-6 border-border/50 hover:card-glow transition-all duration-300">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <Bell className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold text-lg text-foreground">System Notifications</h3>
+                  <Badge variant="outline" className="text-xs">Real-time Alerts</Badge>
                 </div>
                 <Switch checked={toggleStates.notifications} onCheckedChange={() => toggleComponent('notifications')} />
               </div>
               <div className="space-y-3 max-h-80 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No notifications yet</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    {firebaseSensorData ? "All systems normal" : "Waiting for sensor data..."}
+                  </p>
                 ) : (
                   notifications.map((notif) => (
                     <div
@@ -512,6 +516,53 @@ const Index = () => {
                   ))
                 )}
               </div>
+            </Card>
+          </TabsContent>
+
+          {/* Live Sensors Tab */}
+          <TabsContent value="sensors" className="space-y-8">
+            <Card className="p-6 border-border/50 bg-gradient-to-br from-green-500/5 to-green-500/10">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-xl text-foreground mb-2">
+                    ESP32 Hardware Sensors
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Real-time data from your physical ESP32 device via Firebase
+                  </p>
+                </div>
+                <Badge variant="default" className="bg-green-500">
+                  <Activity className="w-3 h-3 mr-1 animate-pulse" />
+                  Hardware
+                </Badge>
+              </div>
+            </Card>
+
+            <LiveSensorData />
+
+            <Card className="p-6 border-border/50 bg-muted/20">
+              <h3 className="font-semibold text-lg text-foreground mb-4 flex items-center">
+                <Info className="w-5 h-5 mr-2 text-primary" />
+                Setup Instructions
+              </h3>
+              <ol className="space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">1</span>
+                  <span>Connect your ESP32 device to your laptop via USB</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">2</span>
+                  <span>Run the bridge script: <code className="bg-muted px-2 py-1 rounded">python agrorakshak_bridge.py</code></span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">3</span>
+                  <span>Data will automatically flow: ESP32 → Laptop → Firebase → This Dashboard</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">4</span>
+                  <span>Monitor live sensor readings updated every ~5 seconds</span>
+                </li>
+              </ol>
             </Card>
           </TabsContent>
 
@@ -590,166 +641,187 @@ const Index = () => {
             </Card>
           </TabsContent>
 
-          {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-8">
-            <Card className="p-6 border-border/50">
-              <div className="flex items-center gap-3 mb-8">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-lg text-foreground">24-Hour Trends</h3>
-              </div>
-              
-              <div className="space-y-10">
-                <div>
-                  <h4 className="text-sm font-medium text-foreground mb-4">Temperature (°C)</h4>
-                  <div className="h-48 bg-muted/30 rounded-lg p-6 relative">
-                    {historicalData.length > 1 ? (
-                      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <defs>
-                          <linearGradient id="tempGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
-                          </linearGradient>
-                        </defs>
-                        <polyline
-                          fill="url(#tempGradient)"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth="0.5"
-                          points={historicalData
-                            .map((data, i) => {
-                              const x = (i / (historicalData.length - 1)) * 100;
-                              const y = 100 - ((Number(data.temperature) - 20) / 20) * 100;
-                              return `${x},${y}`;
-                            })
-                            .join(" ") + ` 100,100 0,100`}
-                        />
-                      </svg>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-12">Collecting data...</p>
-                    )}
-                    {actuators?.fans_active && (
-                      <div className="absolute top-4 right-4 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
-                        Fans Active
-                      </div>
-                    )}
-                  </div>
-                </div>
+         {/* AgroAI Tab */}
+<TabsContent value="agroai" className="space-y-6">
+  <Card className="p-6 border-border/50 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10">
+    <div className="flex items-start justify-between">
+      <div>
+        <h3 className="font-semibold text-xl text-foreground mb-2">
+          AgroAI Chat Assistant
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Get expert farming advice - Chat with our AI assistant
+        </p>
+      </div>
+      <Badge variant="default" className="bg-emerald-500">
+        <Brain className="w-3 h-3 mr-1" />
+        AI Powered
+      </Badge>
+    </div>
+  </Card>
 
-                <div>
-                  <h4 className="text-sm font-medium text-foreground mb-4">Soil Moisture (%)</h4>
-                  <div className="h-48 bg-muted/30 rounded-lg p-6 relative">
-                    {historicalData.length > 1 ? (
-                      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <defs>
-                          <linearGradient id="moistureGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity="0" />
-                          </linearGradient>
-                        </defs>
-                        <polyline
-                          fill="url(#moistureGradient)"
-                          stroke="hsl(var(--chart-2))"
-                          strokeWidth="0.5"
-                          points={historicalData
-                            .map((data, i) => {
-                              const x = (i / (historicalData.length - 1)) * 100;
-                              const y = 100 - (Number(data.soil_moisture) / 100) * 100;
-                              return `${x},${y}`;
-                            })
-                            .join(" ") + ` 100,100 0,100`}
-                        />
-                      </svg>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-12">Collecting data...</p>
-                    )}
-                    {actuators?.pump_active && (
-                      <div className="absolute top-4 right-4 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
-                        Pump Active
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </TabsContent>
+  <AgroChatbot />
+
+  <Card className="p-6 border-border/50 bg-muted/20">
+    <h3 className="font-semibold text-lg text-foreground mb-4 flex items-center">
+      <Info className="w-5 h-5 mr-2 text-primary" />
+      How to Use AgroAI
+    </h3>
+    <ol className="space-y-3 text-sm text-muted-foreground">
+      <li className="flex items-start">
+        <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">1</span>
+        <span>Type your farming or gardening question in the chat</span>
+      </li>
+      <li className="flex items-start">
+        <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">2</span>
+        <span>Get instant expert advice from our AI assistant</span>
+      </li>
+      <li className="flex items-start">
+        <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">3</span>
+        <span>Use suggested follow-up questions for deeper insights</span>
+      </li>
+    </ol>
+  </Card>
+</TabsContent>
 
           {/* AI Diagnosis Tab */}
-          <TabsContent value="ai" className="space-y-8">
-            <Card className="p-6 border-border/50">
-              <div className="flex items-center gap-3 mb-8">
-                <Leaf className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-lg text-foreground">AI Disease Detection</h3>
+          <TabsContent value="ai" className="space-y-6">
+            <Card className="p-6 border-border/50 bg-gradient-to-br from-primary/5 to-primary/10">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-semibold text-xl text-foreground mb-2">
+                    AI Plant Disease Detection
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Upload plant images for instant disease classification using YOLOv8
+                  </p>
+                </div>
+                <Badge variant="default" className="bg-green-500">
+                  <Activity className="w-3 h-3 mr-1" />
+                  Live Model
+                </Badge>
               </div>
 
-              <div className="text-center py-10">
-                <Button
-                  onClick={runAIScan}
-                  disabled={isScanning}
-                  size="lg"
-                  className="px-10 py-6 text-base"
-                >
-                  {isScanning ? (
-                    <>
-                      <Activity className="w-5 h-5 mr-2 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Leaf className="w-5 h-5 mr-2" />
-                      Run Live AI Scan
-                    </>
-                  )}
-                </Button>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <div className="bg-background/50 backdrop-blur-sm p-4 rounded-lg border border-border/50">
+                  <p className="text-2xl font-bold text-primary">8</p>
+                  <p className="text-xs text-muted-foreground mt-1">Disease Types</p>
+                </div>
+                <div className="bg-background/50 backdrop-blur-sm p-4 rounded-lg border border-border/50">
+                  <p className="text-2xl font-bold text-primary">95%+</p>
+                  <p className="text-xs text-muted-foreground mt-1">Accuracy</p>
+                </div>
+                <div className="bg-background/50 backdrop-blur-sm p-4 rounded-lg border border-border/50">
+                  <p className="text-2xl font-bold text-primary">&lt;2s</p>
+                  <p className="text-xs text-muted-foreground mt-1">Response Time</p>
+                </div>
+                <div className="bg-background/50 backdrop-blur-sm p-4 rounded-lg border border-border/50">
+                  <p className="text-2xl font-bold text-primary">YOLOv8</p>
+                  <p className="text-xs text-muted-foreground mt-1">Model Version</p>
+                </div>
               </div>
+            </Card>
 
-              {aiResult && (
-                <div className="mt-8 p-6 bg-muted/30 rounded-lg border border-border">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Diagnosis</p>
-                      <p className="text-xl font-semibold text-primary">{aiResult.diagnosis}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Confidence</p>
-                      <p className="text-xl font-semibold text-primary">{aiResult.confidence}%</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Status</p>
-                      <Badge variant={aiResult.diagnosis === "Healthy" ? "default" : "destructive"}>
-                        {aiResult.diagnosis === "Healthy" ? "Normal" : "Action Required"}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="pt-6 border-t border-border">
-                    <p className="text-sm font-medium text-foreground mb-3">Recommended Action:</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{aiResult.remedy}</p>
+            <Card className="p-0 border-border/50 overflow-hidden">
+              <div className="relative bg-background" style={{ height: '650px' }}>
+                <div className="absolute inset-0 flex items-center justify-center bg-muted/30 z-10" id="yolo-loader">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-primary mx-auto mb-4"></div>
+                    <p className="text-sm text-muted-foreground">Loading Detection System...</p>
                   </div>
                 </div>
-              )}
+
+                <iframe 
+                  src="https://app2-gamma-three.vercel.app"
+                  className="w-full h-full border-0"
+                  title="YOLO Disease Detection System"
+                  allow="camera; microphone; clipboard-read; clipboard-write; accelerometer; gyroscope"
+                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+                  onLoad={() => {
+                    const loader = document.getElementById('yolo-loader');
+                    if (loader) loader.style.display = 'none';
+                  }}
+                />
+              </div>
             </Card>
 
             <Card className="p-6 border-border/50">
-              <h3 className="font-semibold text-lg text-foreground mb-6">AI Model Information</h3>
+              <h3 className="font-semibold text-lg text-foreground mb-6 flex items-center">
+                <Brain className="w-5 h-5 mr-2 text-primary" />
+                Model Specifications
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Model Architecture</p>
-                  <p className="text-foreground font-medium">CNN (MobileNetV2)</p>
+                  <p className="text-sm text-muted-foreground mb-2">Architecture</p>
+                  <p className="text-foreground font-medium">YOLOv8 Small (Ultralytics)</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Overall Accuracy</p>
-                  <p className="text-foreground font-medium">96.5%</p>
+                  <p className="text-sm text-muted-foreground mb-2">Framework</p>
+                  <p className="text-foreground font-medium">PyTorch 2.0.1 + Flask API</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Training Dataset</p>
+                  <p className="text-foreground font-medium">Custom Plant Disease Dataset</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Validation Accuracy</p>
+                  <p className="text-foreground font-medium">96.5% mAP@50</p>
                 </div>
                 <div className="md:col-span-2">
-                  <p className="text-sm text-muted-foreground mb-3">Detectable Diseases</p>
+                  <p className="text-sm text-muted-foreground mb-3">Detectable Conditions</p>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">Healthy</Badge>
-                    <Badge variant="secondary">Early Blight</Badge>
-                    <Badge variant="secondary">Late Blight</Badge>
-                    <Badge variant="secondary">Septoria Leaf Spot</Badge>
-                    <Badge variant="secondary">Bacterial Spot</Badge>
-                    <Badge variant="secondary">Target Spot</Badge>
+                    <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/20">
+                      ✓ Healthy
+                    </Badge>
+                    <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/20">
+                      Early Blight
+                    </Badge>
+                    <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/20">
+                      Late Blight
+                    </Badge>
+                    <Badge variant="outline" className="bg-orange-500/10 text-orange-700 border-orange-500/20">
+                      Leaf Miner
+                    </Badge>
+                    <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/20">
+                      Magnesium Deficiency
+                    </Badge>
+                    <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/20">
+                      Nitrogen Deficiency
+                    </Badge>
+                    <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/20">
+                      Potassium Deficiency
+                    </Badge>
+                    <Badge variant="outline" className="bg-purple-500/10 text-purple-700 border-purple-500/20">
+                      Spotted Wilt Virus
+                    </Badge>
                   </div>
                 </div>
               </div>
+            </Card>
+
+            <Card className="p-6 border-border/50 bg-muted/20">
+              <h3 className="font-semibold text-lg text-foreground mb-4 flex items-center">
+                <Info className="w-5 h-5 mr-2 text-primary" />
+                How to Use
+              </h3>
+              <ol className="space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">1</span>
+                  <span>Click the upload area or drag and drop a plant leaf image</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">2</span>
+                  <span>Wait for the AI model to process the image (typically 1-2 seconds)</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">3</span>
+                  <span>Review the detection results showing disease classification and confidence scores</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 text-xs font-bold">4</span>
+                  <span>Follow the recommended treatment actions based on the diagnosis</span>
+                </li>
+              </ol>
             </Card>
           </TabsContent>
         </Tabs>
