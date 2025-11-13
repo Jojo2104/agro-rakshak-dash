@@ -195,7 +195,7 @@ const Index = () => {
     // Check if similar notification exists in last minute to avoid spam
     const recentNotif = notifications.find((n: Notification) => 
       n.message === message && 
-      Date.now() - new Date(n.created_at).getTime() < 60000
+      Date.now() - new Date(n.created_at).getTime() < 2000
     );
     
     if (recentNotif) return;
