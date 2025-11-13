@@ -166,10 +166,10 @@ const Index = () => {
       const message = `High temperature detected: ${data.temperature.toFixed(1)}°C (Threshold: ${thresholds.max_temperature}°C)`;
       await createNotification(message, 'warning');
       
-      // Auto-activate fans if not already active
-      if (actuators && !actuators.fans_active) {
-        await toggleActuator('fans_active');
-      }
+     // // Auto-activate fans if not already active
+      //if (actuators && !actuators.fans_active) {
+        //await toggleActuator('fans_active');
+      //}
     }
 
     // Check soil moisture threshold
@@ -178,9 +178,9 @@ const Index = () => {
       await createNotification(message, 'warning');
       
       // Auto-activate pump if not already active
-      if (actuators && !actuators.pump_active) {
-        await toggleActuator('pump_active');
-      }
+     // if (actuators && !actuators.pump_active) {
+       // await toggleActuator('pump_active');
+      //}
     }
 
     // Normal conditions notification (optional, less frequent)
