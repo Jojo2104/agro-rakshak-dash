@@ -568,48 +568,6 @@ const Index = () => {
 
           {/* Control Tab */}
           <TabsContent value="control" className="space-y-8">
-            <Card className="p-6 border-border/50">
-              <div className="flex items-center gap-3 mb-8">
-                <Settings className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-lg text-foreground">Automation Settings</h3>
-              </div>
-              
-              <div className="space-y-8">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-4 block">
-                    Maximum Temperature Threshold: {thresholds?.max_temperature ?? 32}°C
-                  </label>
-                  <Slider
-                    value={[Number(thresholds?.max_temperature ?? 32)]}
-                    onValueChange={(value) => updateThreshold('max_temperature', value[0])}
-                    min={25}
-                    max={40}
-                    step={1}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground mt-3">
-                    Cooling fans will activate when temperature exceeds this value
-                  </p>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-4 block">
-                    Minimum Soil Moisture Threshold: {thresholds?.min_soil_moisture ?? 50}%
-                  </label>
-                  <Slider
-                    value={[Number(thresholds?.min_soil_moisture ?? 50)]}
-                    onValueChange={(value) => updateThreshold('min_soil_moisture', value[0])}
-                    min={30}
-                    max={70}
-                    step={5}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground mt-3">
-                    Water pump will activate when soil moisture drops below this value
-                  </p>
-                </div>
-              </div>
-            </Card>
 
             <Card className="p-6 border-border/50">
               <div className="flex items-center gap-3 mb-8">
