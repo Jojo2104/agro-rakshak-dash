@@ -666,11 +666,11 @@ const Index = () => {
                   <p className="text-xs text-muted-foreground mt-1">Disease Types</p>
                 </div>
                 <div className="bg-background/50 backdrop-blur-sm p-4 rounded-lg border border-border/50">
-                  <p className="text-2xl font-bold text-primary">95%+</p>
+                  <p className="text-2xl font-bold text-primary">80%+</p>
                   <p className="text-xs text-muted-foreground mt-1">Accuracy</p>
                 </div>
                 <div className="bg-background/50 backdrop-blur-sm p-4 rounded-lg border border-border/50">
-                  <p className="text-2xl font-bold text-primary">&lt;2s</p>
+                  <p className="text-2xl font-bold text-primary">&lt;5s</p>
                   <p className="text-xs text-muted-foreground mt-1">Response Time</p>
                 </div>
                 <div className="bg-background/50 backdrop-blur-sm p-4 rounded-lg border border-border/50">
@@ -715,7 +715,7 @@ const Index = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Framework</p>
-                  <p className="text-foreground font-medium">PyTorch 2.0.1 + Flask API</p>
+                  <p className="text-foreground font-medium">Ultralytics + PyTorch 2.0.1</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Training Dataset</p>
@@ -723,7 +723,7 @@ const Index = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Validation Accuracy</p>
-                  <p className="text-foreground font-medium">96.5% mAP@50</p>
+                  <p className="text-foreground font-medium">80% mAP@0.5</p>
                 </div>
                 <div className="md:col-span-2">
                   <p className="text-sm text-muted-foreground mb-3">Detectable Conditions</p>
